@@ -9,7 +9,7 @@ pygame.display.set_caption("Super meat boy copy")
 
 clock = pygame.time.Clock()
 
-background = pygame.image.load("backdropSamurai.png")
+background = pygame.image.load("assets/backdropSamurai.png")
 background = pygame.transform.scale(background, (WIDTH, HEIGHT))
 
 BODY_COLOR    = (0, 200, 255)
