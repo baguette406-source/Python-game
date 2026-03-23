@@ -41,7 +41,7 @@ JUMPING_SURFACE = pygame.transform.scale(
 
 WALK_FRAMES = [
     pygame.transform.scale(pygame.image.load(f"walk{i}.gif").convert_alpha(), (48, 64))
-    for i in range (1, 5)
+    for i in range(1, 5)
 ]
 
 BACKGROUND = pygame.transform.scale(
@@ -49,22 +49,20 @@ BACKGROUND = pygame.transform.scale(
 )
 
 BLOCK_IMAGE = pygame.transform.scale(
-    pygame.image.load("brick_block.png").convert_alpha(),(48, 48)
+    pygame.image.load("brick_block.png").convert_alpha(), (48, 48)
 )
-def get(c):
-    print("Test")
-    print(c)
 
 BLOCK_SIZE = 48
 
 # Load block placements
 blocks = []
-with open("level.txt", "r") as f:
+with open("level.txt", "r", encoding="utf-8-sig") as f:
     for line in f:
         line = line.strip()
         if line:
-
-            x = map(get, (line.split()) )
+            parts = line.split()
+            x = int(parts[0])
+            y = int(parts[1])
             blocks.append(pygame.Rect(x, y, BLOCK_SIZE, BLOCK_SIZE))
 
 # --- Rect ---
@@ -84,21 +82,6 @@ while True:
     X_VELOCITY = 0
     MOVING = False
 
-    # Jump when space is pressed
-    if keys[pygame.K_SPACE] and not jumping:
-        jumping = True
-        Y_VELOCITY = JUMP_HEIGHT
-
-    # Apply physics while jumping is true
-    if jumping:
-        Y_POSITION -= Y_VELOCITY
-        Y_VELOCITY -= Y_GRAVITY
-
-        if Y_POSITION >= GROUND_Y:
-            Y_POSITION = GROUND_Y
-            jumping = False
-            Y_VELOCITY = 0
-
     # Move left
     if keys[pygame.K_a]:
         X_VELOCITY = -VELOCITY
@@ -116,19 +99,9 @@ while True:
         pygame.quit()
         sys.exit()
 
-    if MOVING and not jumping:
-        anim_timer += 1
-        if anim_timer >= ANIM_SPEED:
-            anim_timer = 0
-            anim_frame = (anim_frame + 1) % len(WALK_FRAMES)
-
-    else:
-        anim_frame = 0
-        anim_timer = 0
-
-    # Update position
+    # --- X movement and collision ---
     X_POSITION += X_VELOCITY
-    mario_rect.center = (X_POSITION, Y_POSITION)
+    mario_rect.centerx = int(X_POSITION)
 
     for block in blocks:
         if mario_rect.colliderect(block):
@@ -138,21 +111,37 @@ while True:
                 mario_rect.left = block.right
             X_POSITION = mario_rect.centerx
 
+    # --- Y movement and collision ---
+    if jumping:
+        Y_POSITION -= Y_VELOCITY
+        Y_VELOCITY -= Y_GRAVITY
+
     mario_rect.centery = int(Y_POSITION)
 
     on_ground = False
     for block in blocks:
         if mario_rect.colliderect(block):
-            if Y_VELOCITY < 0:
-                mario_rect.top = block.bottom
-                Y_POSITION = mario_rect.centery
-                Y_VELOCITY = 0
-            elif Y_VELOCITY >= 0:
+            # Check if Mario is coming from above (feet near top of block)
+            if mario_rect.bottom - block.top < 20 and Y_VELOCITY <= 0:
                 mario_rect.bottom = block.top
+                Y_POSITION = mario_rect.centery
                 on_ground = True
                 jumping = False
                 Y_VELOCITY = 0
+            # Check if Mario hit the block from below
+            elif mario_rect.top > block.top and Y_VELOCITY > 0:
+                mario_rect.top = block.bottom
+                Y_VELOCITY = 0
+    for block in blocks:
+        if mario_rect.colliderect(block):
+            if mario_rect.bottom - block.top > 5:  # only push sideways if not just standing on top
+                if X_VELOCITY > 0:
+                    mario_rect.right = block.left
+                elif X_VELOCITY < 0:
+                    mario_rect.left = block.right
+                X_POSITION = mario_rect.centerx
 
+    # Ground floor fallback
     if Y_POSITION >= GROUND_Y:
         Y_POSITION = GROUND_Y
         mario_rect.centery = int(Y_POSITION)
@@ -160,20 +149,36 @@ while True:
         Y_VELOCITY = 0
         on_ground = True
 
+    # Jump input
+    if keys[pygame.K_SPACE] and on_ground:
+        jumping = True
+        Y_VELOCITY = JUMP_HEIGHT
 
-    # Update camera
+    # --- Animation ---
+    if MOVING and not jumping:
+        anim_timer += 1
+        if anim_timer >= ANIM_SPEED:
+            anim_timer = 0
+            anim_frame = (anim_frame + 1) % len(WALK_FRAMES)
+    else:
+        anim_frame = 0
+        anim_timer = 0
+
+    # --- Update camera ---
     target_cam_x = X_POSITION - WIDTH // 2
     target_cam_y = Y_POSITION - HEIGHT // 2
 
     cam_x += (target_cam_x - cam_x) * 0.1
     cam_y += (target_cam_y - cam_y) * 0.1
 
-    # Clamp camera to world bounds
     cam_x = max(0, min(cam_x, WORLD_WIDTH - WIDTH))
     cam_y = max(0, min(cam_y, WORLD_HEIGHT - HEIGHT))
 
-    # Drawing
+    # --- Drawing ---
     SCREEN.blit(BACKGROUND, (-cam_x, -cam_y))
+
+    for block in blocks:
+        SCREEN.blit(BLOCK_IMAGE, (block.x - cam_x, block.y - cam_y))
 
     draw_x = mario_rect.x - cam_x
     draw_y = mario_rect.y - cam_y
